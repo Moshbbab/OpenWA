@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.3] - 2026-07-03
+
 ### Added
 
 - **Plugins can send WhatsApp voice notes through `ctx.conversations.send`.** A new `voice` envelope type sends the media at `mediaUrl` as a PTT voice note (audio bubble with waveform) rather than a plain audio file — the host maps it to an audio send with `ptt` set, which defaults the codec to `audio/ogg; codecs=opus` and classifies the message as `voice`, matching inbound classification. It rides the same `conversation:send` permission and activated-session scope as the other media types. (#607)
