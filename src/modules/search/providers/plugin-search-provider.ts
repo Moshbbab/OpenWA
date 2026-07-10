@@ -35,7 +35,25 @@ export class PluginSearchProvider implements SearchProvider {
   async search(query: SearchQuery): Promise<SearchResults> {
     const reply = await this.transport.dispatchSearch({ query, timeoutMs: this.timeoutMs });
     if (!reply.ok) throw new ServiceUnavailableException(reply.error);
-    return reply.results;
+    // Defense-in-depth: the plugin is expected to honor sessionIds, but re-filter host-side so a plugin
+    // bug or leak can never surface a hit outside the caller's allowed session scope — mirroring the
+    // SQL-enforced scoping the built-in provider gets for free. The guard mirrors the built-in
+    // provider's applyFilters condition (`sessionIds && sessionIds.length`) so the two providers never
+    // diverge for the same query (an empty array is a no-op on both paths). When no filtering is
+    // needed, return the results untouched. Preserve the plugin's total when no hits were out of scope
+    // (the normal, well-behaved case) so pagination ("Load More" = hits.length < total) still works;
+    // fall back to the filtered page count only when a leak was actually stripped (the plugin's claimed
+    // total is then also suspect). tookMs/provider are passthrough metadata unrelated to scope.
+    if (!query.sessionIds || !query.sessionIds.length) return reply.results;
+    const allowed = new Set(query.sessionIds);
+    const scoped = reply.results.hits.filter(h => allowed.has(h.sessionId));
+    const leaked = reply.results.hits.length - scoped.length;
+    return {
+      hits: scoped,
+      total: leaked > 0 ? scoped.length : reply.results.total,
+      tookMs: reply.results.tookMs,
+      provider: reply.results.provider,
+    };
   }
 
   async health(): Promise<SearchHealth> {
