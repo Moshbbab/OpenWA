@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-_Nothing yet._
+- **Dashboard Korean (ko) locale polish.** Refined several ko strings for consistency, fluency, and accuracy (follow-up to #679): "Create New Session" → `새 세션 생성` (aligns with `생성` used elsewhere in the create flow); the plugin "Configuration" tab → `설정` (matches the rest of the config UI); "Start messaging" → `대화 시작하기` (idiomatic — in Korean one starts a conversation, not a "message"); the WhatsApp Web build "current known-good" now reads `현재` instead of `최신` (latest), which had inverted the version-pinning intent; the "New" session status → `신규` (the conventional Korean status label); and the template placeholder example re-phrases the `{{orderId}}` clause so the interpolation reads naturally.
 
 ## [0.8.14] - 2026-07-10
 
