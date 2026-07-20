@@ -209,6 +209,34 @@ async function sendTextMessage(
 
 ## 20.3 Issue Guidelines
 
+### Issue vs. Discussions
+
+Before opening an Issue, decide whether it belongs here or in **GitHub Discussions**.
+Most misrouted reports are configuration, provider, or environment questions rather than
+defects in OpenWA — routing them correctly upfront saves time for everyone (faster answers
+for you, cleaner triage for maintainers). When in doubt, open a Discussion first; it can
+always be promoted to an Issue once a real defect is confirmed.
+
+| Open an **Issue** | Open a **Discussion** |
+|---|---|
+| Reproducible defect in OpenWA code with clear steps, expected vs. actual | Setup / configuration help ("my proxy doesn't work, how do I configure X?") |
+| Crash, panic, wrong API response, regression after upgrade | Provider-specific quirks (webshare, IPRoyal, brightdata, Twilio, etc.) |
+| Documented behavior contradicted by actual behavior | "Is X possible?" / "What's the best way to Y?" |
+| Security issue (use `SECURITY.md`, not a public issue) | Hosting-platform / network / firewall questions |
+
+**Common gray-zone examples (these go to Discussions, not Issues):**
+
+- "My proxy works on first start but fails after pod restart" → almost always a
+  provider-side IP allowlist, not an OpenWA bug. See `docs/12-troubleshooting-faq.md`.
+- "WhatsApp blocked my number" → provider/WhatsApp policy, not a code defect.
+- "How do I deploy behind nginx/Traefik?" → configuration, use Discussions.
+- "Why is my QR not showing?" → start with the troubleshooting FAQ; open an Issue only
+  if the documented fixes don't resolve it.
+
+If an Issue lands in the gray zone, it will be labeled `needs-info`, `not-a-bug`, or
+`move-to-discussions`. Environmental or provider-side reports are closed and continued in
+Discussions.
+
 ### Bug Reports
 
 Use the bug report template:
@@ -274,10 +302,16 @@ Any other relevant information, mockups, or examples
 | `good first issue` | Good for newcomers |
 | `help wanted` | Extra attention needed |
 | `question` | Further information requested |
+| `needs-info` | Awaiting reporter input to proceed |
+| `not-a-bug` | External/environmental cause (provider, network, hosting); not an OpenWA defect |
+| `move-to-discussions` | Belongs in GitHub Discussions, not Issues — see §20.3 Issue vs. Discussions |
+| `invalid` | This doesn't seem right |
 | `wontfix` | This will not be worked on |
 | `duplicate` | This issue already exists |
-| `priority:high` | High priority issue |
-| `priority:low` | Low priority issue |
+| `security` | Security-related |
+| `design` | Architecture / design discussion |
+| `engine:baileys` | Baileys engine specific |
+| `upstream-blocked` | Blocked on upstream library/WhatsApp behavior; no OpenWA-side fix |
 
 ## 20.4 Community Channels
 
