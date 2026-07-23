@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Outbound `withSafeFetch` no longer crashes the process on unread webhook response bodies.**
+  Status-only callers (queued webhook delivery, webhook test, deprecated direct delivery) left the
+  undici response body unread; when the peer reset the TLS socket — or the per-request dispatcher
+  was destroyed — undici could emit `TypeError: terminated` / `ECONNRESET` on the body stream with
+  no listener, becoming a fatal `uncaughtException` that took every WhatsApp session offline (#887).
+  `withSafeFetch` now cancels unread bodies before tearing down the connection; callers that already
+  stream the body (media / plugin downloads) are unchanged.
+
 ## [0.10.8] - 2026-07-23
 
 ### Added
