@@ -28,6 +28,9 @@ import { userPart } from '../../engine/identity/wa-id';
 import { paginate, ListOptions, resolveListWindow } from '../../common/utils/paginate';
 import { isUniqueConstraintError } from '../../common/utils/unique-constraint.util';
 import { resolveFeatureFlags } from '../../config/feature-flags';
+import { StatusStoreService } from '../status-store/status-store.service';
+import { buildIncomingStatus } from '../status-store/incoming-status';
+import type { StatusUpdate } from '../status-store/entities/status-update.entity';
 import {
   IWhatsAppEngine,
   EngineStatus,
@@ -234,6 +237,7 @@ export class SessionService implements OnModuleDestroy, OnModuleInit, OnApplicat
     private readonly eventsGateway: EventsGateway,
     private readonly webhookService: WebhookService,
     private readonly hookManager: HookManager,
+    private readonly statusStore: StatusStoreService,
     @Optional()
     private readonly configService?: ConfigService,
     // Shared lid<->phone table (global). Used to persist an inbound @lid sender's resolved phone so
@@ -646,6 +650,45 @@ export class SessionService implements OnModuleDestroy, OnModuleInit, OnApplicat
   }
 
   /**
+   * Backfill currently-active statuses from the engine on connect, so the store has today's stories
+   * even for ones posted before this session came online (live posts land via onMessage). Best-effort:
+   * Baileys doesn't support this (throws EngineNotSupportedError) and any other engine error must not
+   * take down the ready path, so every failure is swallowed here. Ingest is idempotent on
+   * `(sessionId, waStatusId)`, so this can never double-count a status onMessage already ingested.
+   */
+  private async seedStatuses(sessionId: string, engine: IWhatsAppEngine): Promise<void> {
+    try {
+      const statuses = await engine.getContactStatuses();
+      for (const s of statuses) {
+        await this.statusStore.ingest(sessionId, {
+          waStatusId: s.id,
+          contactJid: s.contact.id,
+          contactName: s.contact.name,
+          contactPushName: s.contact.pushName,
+          type: s.type,
+          caption: s.caption,
+          backgroundColor: s.backgroundColor,
+          font: s.font,
+          // wwjs Status carries no inline media bytes on seed; only live onMessage attaches media.
+          postedAt: s.timestamp.getTime(),
+        });
+      }
+    } catch (err) {
+      this.logger.debug('Status seed skipped', {
+        sessionId,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
+  /**
+   * Hook point for the status.received dispatch (webhook/WS/hook), called once an inbound status row
+   * is ingested. Intentionally a no-op for now — wired up separately so ingest itself ships first.
+   */
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  private dispatchStatusReceived(_sessionId: string, _row: StatusUpdate): void {}
+
+  /**
    * Persist pre-connection history into the `messages` table for the chat view, without webhook/hook/ws
    * dispatch (it predates the live session). De-duplicated by `waMessageId` so re-syncs never duplicate.
    */
@@ -828,12 +871,30 @@ export class SessionService implements OnModuleDestroy, OnModuleInit, OnApplicat
               error: err instanceof Error ? err.message : String(err),
             }),
           );
+
+        // Best-effort snapshot of the account's own contacts' currently-active statuses. Live status
+        // posts arrive through onMessage below; this just backfills what was already up before we
+        // connected. Not awaited — onReady must not block on it.
+        void this.seedStatuses(id, engine);
       },
       onMessage: (message): void => {
         if (!this.isLiveEngine(id, engine)) return;
-        // Status/Story posts arrive via the inbound path for some engines; don't persist or webhook them.
-        // Mirrors the isStatusBroadcast guard in onMessageCreate below.
+        // Status/Story posts arrive via the inbound path for some engines; ingest them into the
+        // status store instead of the message pipeline. Mirrors the isStatusBroadcast guard in
+        // onMessageCreate below (own-send echo — that branch stays a plain drop).
         if (message.isStatusBroadcast) {
+          const status = buildIncomingStatus(message);
+          if (status) {
+            void this.statusStore
+              .ingest(id, status)
+              .then(row => this.dispatchStatusReceived(id, row))
+              .catch(err =>
+                this.logger.warn('Status ingest failed', {
+                  sessionId: id,
+                  error: err instanceof Error ? err.message : String(err),
+                }),
+              );
+          }
           return;
         }
         // Ephemeral/disappearing messages: skip persist + dispatch when the operator opted out.
