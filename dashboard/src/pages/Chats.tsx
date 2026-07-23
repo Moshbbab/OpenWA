@@ -314,6 +314,7 @@ export function Chats() {
     if (selectedSessionId) {
       void loadChats(selectedSessionId);
       setActiveChat(null);
+      setActiveChannel(null);
       setAttachment(null);
       setPreviewUrl(null);
     }
@@ -658,6 +659,7 @@ export function Chats() {
         if (chat) {
           setActiveTab('chats');
           setActiveChat(chat);
+          setActiveChannel(null);
         } else {
           pendingHitRef.current = null;
         }
@@ -674,6 +676,7 @@ export function Chats() {
     if (chat) {
       setActiveTab('chats');
       setActiveChat(chat);
+      setActiveChannel(null);
     }
   }, [chats, activeChat]);
 
@@ -1054,7 +1057,11 @@ export function Chats() {
                 engine, so the branch order below never depends on a request having actually run. */}
             {activeTab === 'channels' && (
               <div className="chats-list">
-                {!channelsSupported ? (
+                {currentEngine.isLoading ? (
+                  <div className="chats-list-loading">
+                    <Loader2 className="animate-spin" size={24} />
+                  </div>
+                ) : !channelsSupported ? (
                   <div className="chats-list-empty">
                     <span>{t('chats.channels.notSupported')}</span>
                   </div>
