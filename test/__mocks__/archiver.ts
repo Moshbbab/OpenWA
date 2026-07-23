@@ -7,17 +7,23 @@
  * export are sufficient.
  */
 
-export const TarArchive = jest.fn(() => ({
-  on: jest.fn(function () {
-    return this;
-  }),
-  pipe: jest.fn(function () {
-    return this;
-  }),
-  append: jest.fn(function () {
-    return this;
-  }),
-  finalize: jest.fn(() => Promise.resolve()),
-}));
+interface TarArchiveStub {
+  on: (event: string, listener: (...args: unknown[]) => void) => TarArchiveStub;
+  pipe: (destination: unknown) => TarArchiveStub;
+  append: (source: unknown, metadata?: unknown) => TarArchiveStub;
+  finalize: () => Promise<void>;
+}
+
+function makeTarArchiveStub(): TarArchiveStub {
+  const stub: TarArchiveStub = {
+    on: jest.fn(() => stub),
+    pipe: jest.fn(() => stub),
+    append: jest.fn(() => stub),
+    finalize: jest.fn(() => Promise.resolve()),
+  };
+  return stub;
+}
+
+export const TarArchive = jest.fn(makeTarArchiveStub);
 
 export default jest.fn();
