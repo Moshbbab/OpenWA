@@ -1193,3 +1193,57 @@
 .chats-page .chat-image-media {
   cursor: zoom-in;
 }
+
+/* =============================================================================
+   CHANNELS: read-only post pane
+   ============================================================================= */
+.chats-page .channel-room {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.chats-page .chats-room-header {
+  height: 70px;
+  background: var(--bg-white);
+  border-bottom: 1px solid var(--border);
+  padding: 0 1.5rem;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  box-sizing: border-box;
+  color: var(--text-secondary);
+}
+
+.chats-page .chats-room-header h2 {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  text-transform: none;
+  letter-spacing: normal;
+  margin: 0;
+}
+
+.chats-page .messages-list {
+  flex: 1;
+  padding: 1.5rem;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  align-items: flex-start;
+}
+
+.chats-page .messages-list .message-bubble {
+  max-width: 480px;
+}
+
+.chats-page .channel-media {
+  max-width: 100%;
+  max-height: 320px;
+  border-radius: 8px;
+  display: block;
+  margin-bottom: 0.5rem;
+  object-fit: cover;
+}

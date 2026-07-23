@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef, useMemo, useLayoutEffect } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Trans, useTranslation } from 'react-i18next';
 import { nextReconnectState } from '../utils/reconnectState';
 import {
@@ -31,6 +31,7 @@ import {
   type Session,
   type Chat,
   type ChatKind,
+  type Channel,
   type MessageType,
   type SearchHit,
 } from '../services/api';
@@ -48,7 +49,9 @@ import { useToast } from '../components/Toast';
 import { PageHeader } from '../components/PageHeader';
 import { GlobalSearch } from '../components/GlobalSearch';
 import { useChatMessages, useChatMessagesActions, messagesQueryKey } from '../hooks/useChatMessages';
+import { useChannelMessages } from '../hooks/useChannelMessages';
 import { useChatScrollPosition } from '../hooks/useChatScrollPosition';
+import { useCurrentEngineQuery } from '../hooks/queries';
 import MessageBody from '../components/chats/MessageBody';
 import MediaLightbox, { type LightboxItem } from '../components/chats/MediaLightbox';
 import './Chats.css';
@@ -135,15 +138,27 @@ export function Chats() {
 
   // Selected chat & message history
   const [activeChat, setActiveChat] = useState<Chat | null>(null);
+  const [activeChannel, setActiveChannel] = useState<Channel | null>(null);
 
   // Chats/Channels/Status tab selection. Switching tabs closes whatever conversation is open so a
   // press on another tab doesn't leave a Chats-tab room rendered underneath a Channels/Status list.
-  // `setActiveChannel(null)` is added here in Task 7, once that state exists.
   const [activeTab, setActiveTab] = useState<'chats' | 'channels' | 'status'>('chats');
   const switchTab = useCallback((tab: 'chats' | 'channels' | 'status') => {
     setActiveTab(tab);
     setActiveChat(null);
+    setActiveChannel(null);
   }, []);
+
+  // Channels tab: only whatsapp-web.js implements channel listing/reading — Baileys throws 501 for
+  // both, so the query is gated off entirely (never fired) rather than left to fail per-request.
+  const currentEngine = useCurrentEngineQuery();
+  const channelsSupported = currentEngine.data?.engineType === 'whatsapp-web.js';
+  const channelsQuery = useQuery({
+    queryKey: ['channels', selectedSessionId],
+    queryFn: () => sessionApi.getSubscribedChannels(selectedSessionId!),
+    enabled: Boolean(selectedSessionId) && channelsSupported && activeTab === 'channels',
+  });
+  const channelMessages = useChannelMessages(selectedSessionId, activeChannel?.id ?? null);
 
   const {
     data: messages = [],
@@ -968,7 +983,7 @@ export function Chats() {
           </p>
         </div>
       ) : (
-        <div className={`chats-layout ${activeChat ? 'has-active-chat' : ''}`}>
+        <div className={`chats-layout ${activeChat || activeChannel ? 'has-active-chat' : ''}`}>
           {/* LEFT SIDEBAR: session & chat rooms */}
           <aside className="chats-sidebar">
             <div className="sidebar-header-box">
@@ -1030,6 +1045,54 @@ export function Chats() {
                   </div>
                 ) : (
                   filteredChats.map(renderChatRow)
+                )}
+              </div>
+            )}
+
+            {/* Channels list — wwjs-only (newsletter/channel API isn't implemented on Baileys, which
+                throws 501 for both listing and reading). channelsQuery is gated off entirely on that
+                engine, so the branch order below never depends on a request having actually run. */}
+            {activeTab === 'channels' && (
+              <div className="chats-list">
+                {!channelsSupported ? (
+                  <div className="chats-list-empty">
+                    <span>{t('chats.channels.notSupported')}</span>
+                  </div>
+                ) : channelsQuery.isLoading ? (
+                  <div className="chats-list-loading">
+                    <Loader2 className="animate-spin" size={24} />
+                  </div>
+                ) : channelsQuery.error ? (
+                  <div className="chats-list-empty">
+                    <AlertCircle size={24} className="text-warn" />
+                    <span>{t('chats.channels.notReady')}</span>
+                  </div>
+                ) : (channelsQuery.data?.length ?? 0) === 0 ? (
+                  <div className="chats-list-empty">
+                    <span>{t('chats.channels.empty')}</span>
+                  </div>
+                ) : (
+                  channelsQuery.data!.map(ch => (
+                    <div
+                      key={ch.id}
+                      className={`chat-item-card ${activeChannel?.id === ch.id ? 'active' : ''}`}
+                      onClick={() => setActiveChannel(ch)}
+                    >
+                      <div className="chat-avatar">
+                        <Megaphone size={20} />
+                      </div>
+                      <div className="chat-item-info">
+                        <div className="chat-item-top">
+                          <span className="chat-item-name">{ch.name}</span>
+                        </div>
+                        <div className="chat-item-bottom">
+                          <span className="chat-item-snippet">
+                            {t('chats.channels.subscribers', { count: ch.subscriberCount ?? 0 })}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  ))
                 )}
               </div>
             )}
@@ -1439,6 +1502,24 @@ export function Chats() {
                     </button>
                   </form>
                 </footer>
+              </div>
+            ) : activeChannel ? (
+              // Read-only channel pane: no send footer, reactions, delete, reply, or markChatRead —
+              // subscribed channels are a broadcast feed, not a two-way conversation.
+              <div className="channel-room">
+                <header className="chats-room-header">
+                  <Megaphone size={20} />
+                  <h2>{activeChannel.name}</h2>
+                </header>
+                <div className="messages-list">
+                  {(channelMessages.data ?? []).map(m => (
+                    <div key={m.id} className="message-bubble incoming">
+                      {m.hasMedia && m.mediaUrl && <img className="channel-media" src={m.mediaUrl} alt="" />}
+                      {m.body && <div className="message-text">{m.body}</div>}
+                      <span className="message-time">{formatChatTime(m.timestamp)}</span>
+                    </div>
+                  ))}
+                </div>
               </div>
             ) : (
               <div className="chats-room-placeholder">
