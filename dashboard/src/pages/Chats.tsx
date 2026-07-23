@@ -135,6 +135,16 @@ export function Chats() {
 
   // Selected chat & message history
   const [activeChat, setActiveChat] = useState<Chat | null>(null);
+
+  // Chats/Channels/Status tab selection. Switching tabs closes whatever conversation is open so a
+  // press on another tab doesn't leave a Chats-tab room rendered underneath a Channels/Status list.
+  // `setActiveChannel(null)` is added here in Task 7, once that state exists.
+  const [activeTab, setActiveTab] = useState<'chats' | 'channels' | 'status'>('chats');
+  const switchTab = useCallback((tab: 'chats' | 'channels' | 'status') => {
+    setActiveTab(tab);
+    setActiveChat(null);
+  }, []);
+
   const {
     data: messages = [],
     isLoading: loadingMessages,
@@ -630,8 +640,12 @@ export function Chats() {
         setSelectedSessionId(hit.sessionId);
       } else {
         const chat = chats.find(c => c.id === hit.chatId);
-        if (chat) setActiveChat(chat);
-        else pendingHitRef.current = null;
+        if (chat) {
+          setActiveTab('chats');
+          setActiveChat(chat);
+        } else {
+          pendingHitRef.current = null;
+        }
       }
     },
     [selectedSessionId, chats],
@@ -642,7 +656,10 @@ export function Chats() {
     const pending = pendingHitRef.current;
     if (!pending || activeChat?.id === pending.chatId) return;
     const chat = chats.find(c => c.id === pending.chatId);
-    if (chat) setActiveChat(chat);
+    if (chat) {
+      setActiveTab('chats');
+      setActiveChat(chat);
+    }
   }, [chats, activeChat]);
 
   // Best-effort scroll to the hit message. Runs as a layout effect (after useChatScrollPosition's
@@ -850,11 +867,54 @@ export function Chats() {
     [t],
   );
 
-  const filteredChats = chats.filter(
-    c =>
-      c.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      c.id.toLowerCase().includes(searchQuery.toLowerCase()),
-  );
+  const searchMatch = (c: Chat) =>
+    c.name?.toLowerCase().includes(searchQuery.toLowerCase()) || c.id.toLowerCase().includes(searchQuery.toLowerCase());
+
+  // Chats tab: real conversations. Channel/status-kind rows are hidden here and surfaced on their
+  // own tabs instead.
+  const filteredChats = chats.filter(c => c.kind !== 'channel' && c.kind !== 'status' && searchMatch(c));
+  // Status tab: the wwjs aggregate status@broadcast row, if getChats returned one.
+  const statusChats = chats.filter(c => c.kind === 'status' && searchMatch(c));
+
+  // Shared row markup for the Chats and Status lists — a plain function (not memoized) since it
+  // closes over render-scoped state (activeChat, listPics) that already changes every render.
+  const renderChatRow = (chat: Chat) => {
+    const isActive = activeChat?.id === chat.id;
+    return (
+      <div key={chat.id} className={`chat-item-card ${isActive ? 'active' : ''}`} onClick={() => setActiveChat(chat)}>
+        <ChatAvatar pictureUrl={listPics.data?.[chat.id]} kind={chat.kind} />
+
+        <div className="chat-item-info">
+          <div className="chat-item-top">
+            <span className="chat-item-name" title={chat.name || chat.id}>
+              {chat.name || chat.id.split('@')[0]}
+            </span>
+            {chat.kind !== 'individual' && chat.kind !== 'unknown' && (
+              <span className={`chat-kind-badge kind-${chat.kind}`}>{t(`chats.kind.${chat.kind}`)}</span>
+            )}
+            {/* Ternary, not `&&`: a chat with no messages carries timestamp 0, and React
+                renders the number 0 as text — so `0 && <span/>` painted a literal "0"
+                where the time belongs, on every such row. */}
+            {chat.timestamp ? <span className="chat-item-time">{formatChatTime(chat.timestamp)}</span> : null}
+          </div>
+          <div className="chat-item-bottom">
+            <span className="chat-item-snippet" title={formatLastMessageSnippet(chat)}>
+              {formatLastMessageSnippet(chat) || <span className="no-message">{t('chats.noMessageYet')}</span>}
+            </span>
+            {chat.unreadCount > 0 && (
+              <span
+                className="chat-unread-badge"
+                title={t('chats.unreadBadge', { count: chat.unreadCount })}
+                aria-label={t('chats.unreadBadge', { count: chat.unreadCount })}
+              >
+                {chat.unreadCount > 99 ? '99+' : chat.unreadCount}
+              </span>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  };
 
   // Image media items for the lightbox, in render order. `getMediaSrc` reconstructs a usable src
   // from either a base64 payload or a URL — the ChatMessageView shape stores both in `data`.
@@ -928,6 +988,22 @@ export function Chats() {
                 </select>
               </div>
 
+              {/* Chats / Channels / Status tabs */}
+              <div className="chats-tabs" role="tablist">
+                {(['chats', 'channels', 'status'] as const).map(tab => (
+                  <button
+                    key={tab}
+                    type="button"
+                    role="tab"
+                    aria-selected={activeTab === tab}
+                    className={`chats-tab ${activeTab === tab ? 'active' : ''}`}
+                    onClick={() => switchTab(tab)}
+                  >
+                    {t(`chats.tab.${tab}`)}
+                  </button>
+                ))}
+              </div>
+
               {/* Search bar */}
               <div className="chat-search-input">
                 <Search size={18} />
@@ -941,66 +1017,35 @@ export function Chats() {
             </div>
 
             {/* Chat list */}
-            <div className="chats-list">
-              {loadingChats ? (
-                <div className="chats-list-loading">
-                  <Loader2 className="animate-spin" size={24} />
-                  <span>{t('chats.loadingChats')}</span>
-                </div>
-              ) : filteredChats.length === 0 ? (
-                <div className="chats-list-empty">
-                  <span>{t('chats.empty')}</span>
-                </div>
-              ) : (
-                filteredChats.map(chat => {
-                  const isActive = activeChat?.id === chat.id;
-                  return (
-                    <div
-                      key={chat.id}
-                      className={`chat-item-card ${isActive ? 'active' : ''}`}
-                      onClick={() => setActiveChat(chat)}
-                    >
-                      <ChatAvatar pictureUrl={listPics.data?.[chat.id]} kind={chat.kind} />
+            {activeTab === 'chats' && (
+              <div className="chats-list">
+                {loadingChats ? (
+                  <div className="chats-list-loading">
+                    <Loader2 className="animate-spin" size={24} />
+                    <span>{t('chats.loadingChats')}</span>
+                  </div>
+                ) : filteredChats.length === 0 ? (
+                  <div className="chats-list-empty">
+                    <span>{t('chats.empty')}</span>
+                  </div>
+                ) : (
+                  filteredChats.map(renderChatRow)
+                )}
+              </div>
+            )}
 
-                      <div className="chat-item-info">
-                        <div className="chat-item-top">
-                          <span className="chat-item-name" title={chat.name || chat.id}>
-                            {chat.name || chat.id.split('@')[0]}
-                          </span>
-                          {chat.kind !== 'individual' && chat.kind !== 'unknown' && (
-                            <span className={`chat-kind-badge kind-${chat.kind}`}>
-                              {t(`chats.kind.${chat.kind}`)}
-                            </span>
-                          )}
-                          {/* Ternary, not `&&`: a chat with no messages carries timestamp 0, and React
-                              renders the number 0 as text — so `0 && <span/>` painted a literal "0"
-                              where the time belongs, on every such row. */}
-                          {chat.timestamp ? (
-                            <span className="chat-item-time">{formatChatTime(chat.timestamp)}</span>
-                          ) : null}
-                        </div>
-                        <div className="chat-item-bottom">
-                          <span className="chat-item-snippet" title={formatLastMessageSnippet(chat)}>
-                            {formatLastMessageSnippet(chat) || (
-                              <span className="no-message">{t('chats.noMessageYet')}</span>
-                            )}
-                          </span>
-                          {chat.unreadCount > 0 && (
-                            <span
-                              className="chat-unread-badge"
-                              title={t('chats.unreadBadge', { count: chat.unreadCount })}
-                              aria-label={t('chats.unreadBadge', { count: chat.unreadCount })}
-                            >
-                              {chat.unreadCount > 99 ? '99+' : chat.unreadCount}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })
-              )}
-            </div>
+            {/* Status list — the wwjs status@broadcast aggregate row, if present. Real per-status
+                (per-contact story) rows are a future capability; this tab starts as a placeholder. */}
+            {activeTab === 'status' && (
+              <div className="chats-list">
+                {statusChats.map(renderChatRow)}
+                <div className="chats-room-placeholder">
+                  <CircleDashed size={40} />
+                  <h2>{t('chats.status.placeholderTitle')}</h2>
+                  <p>{t('chats.status.placeholderDesc')}</p>
+                </div>
+              </div>
+            )}
           </aside>
 
           {/* RIGHT VIEW: active chat room */}
