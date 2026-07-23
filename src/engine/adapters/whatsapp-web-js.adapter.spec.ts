@@ -327,6 +327,54 @@ describe('WhatsAppWebJsAdapter.getChatHistory enrichment (parity with the live p
     });
     expect(out[1].quotedMessage).toEqual({ id: 'Q1', body: 'earlier' });
   });
+
+  it('derives chatId/isGroup/isStatusBroadcast/kind from the REQUESTED chatId, not from `fromMe ? to : from` (participant-authored status)', async () => {
+    // A status reply/post: the raw message is authored by a contact (fromMe: false), so
+    // buildIncomingMessageBase's own chatId (`msg.from`) resolves to the participant's JID, not
+    // status@broadcast. Only the adapter's post-mapping override — keyed off the chatId this method
+    // was actually called with — can produce the correct chat-level fields.
+    const statusMsg = {
+      id: { _serialized: 'M3' },
+      from: '621@c.us',
+      to: 'status@broadcast',
+      body: 'status update',
+      type: 'chat',
+      timestamp: 300,
+      fromMe: false,
+      hasMedia: false,
+      hasQuotedMsg: false,
+    };
+    const chat = { fetchMessages: jest.fn().mockResolvedValue([statusMsg]) };
+    const client = { getChatById: jest.fn().mockResolvedValue(chat) };
+
+    const out = await readyAdapter(client).getChatHistory('status@broadcast', 50, false);
+
+    expect(out[0].chatId).toBe('status@broadcast');
+    expect(out[0].isStatusBroadcast).toBe(true);
+    expect(out[0].isGroup).toBe(false);
+    expect(out[0].kind).toBe('status');
+  });
+
+  it('derives chatId-derived fields for a group chat from the requested chatId', async () => {
+    const groupMsg = {
+      id: { _serialized: 'M4' },
+      from: 'me',
+      to: '120363000@g.us',
+      body: 'hi all',
+      type: 'chat',
+      timestamp: 400,
+      fromMe: true,
+      hasMedia: false,
+      hasQuotedMsg: false,
+    };
+    const chat = { fetchMessages: jest.fn().mockResolvedValue([groupMsg]) };
+    const client = { getChatById: jest.fn().mockResolvedValue(chat) };
+
+    const out = await readyAdapter(client).getChatHistory('120363000@g.us', 50, false);
+
+    expect(out[0].kind).toBe('group');
+    expect(out[0].isGroup).toBe(true);
+  });
 });
 
 describe('WhatsAppWebJsAdapter.sendPollMessage', () => {
