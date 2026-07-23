@@ -161,6 +161,15 @@ export function Chats() {
   });
   const channelMessages = useChannelMessages(selectedSessionId, activeChannel?.id ?? null);
 
+  // A channel feed opens at its newest post, mirroring the chat room's initial scroll. The pane is
+  // also keyed by channel id, so switching channels remounts the feed instead of reusing the DOM
+  // (and its stale scroll offset) of the previous channel.
+  const channelFeedRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    const el = channelFeedRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [activeChannel?.id, channelMessages.data]);
+
   const {
     data: messages = [],
     isLoading: loadingMessages,
@@ -1545,7 +1554,7 @@ export function Chats() {
             ) : activeChannel ? (
               // Read-only channel pane: no send footer, reactions, delete, reply, or markChatRead —
               // subscribed channels are a broadcast feed, not a two-way conversation.
-              <div className="channel-room">
+              <div key={activeChannel.id} className="channel-room">
                 <header className="chats-room-header">
                   <button
                     className="room-back"
@@ -1557,7 +1566,7 @@ export function Chats() {
                   <Megaphone size={20} />
                   <h2>{activeChannel.name}</h2>
                 </header>
-                <div className="messages-list">
+                <div className="messages-list" ref={channelFeedRef}>
                   {channelMessages.isLoading ? (
                     <div className="messages-loading">
                       <Loader2 className="animate-spin" size={32} />
