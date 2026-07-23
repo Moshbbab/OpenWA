@@ -19,6 +19,7 @@ import {
   CornerUpLeft,
   Trash2,
   ChevronDown,
+  Plus,
 } from 'lucide-react';
 import { useProfilePicture } from '../hooks/useProfilePicture';
 import { useProfilePictures } from '../hooks/useProfilePictures';
@@ -27,6 +28,7 @@ import { formatPhoneForDisplay } from '../utils/formatPhone';
 import {
   sessionApi,
   messageApi,
+  contactApi,
   asMessageType,
   type Session,
   type Chat,
@@ -47,6 +49,7 @@ import { useWebSocket } from '../hooks/useWebSocket';
 import { useDocumentTitle } from '../hooks/useDocumentTitle';
 import { useRole } from '../hooks/useRole';
 import { useToast } from '../components/Toast';
+import { Modal } from '../components/Modal';
 import { PageHeader } from '../components/PageHeader';
 import { GlobalSearch } from '../components/GlobalSearch';
 import { useChatMessages, useChatMessagesActions, messagesQueryKey } from '../hooks/useChatMessages';
@@ -171,7 +174,7 @@ export function Chats() {
   const { t } = useTranslation();
   useDocumentTitle(t('nav.chats'));
   const { canWrite } = useRole();
-  const { error: showErrorToast, warning: showWarningToast } = useToast();
+  const { success: showSuccessToast, error: showErrorToast, warning: showWarningToast } = useToast();
 
   // Sessions list & active session
   const [sessions, setSessions] = useState<Session[]>([]);
@@ -229,6 +232,116 @@ export function Chats() {
     const el = statusFeedRef.current;
     if (el) el.scrollTop = el.scrollHeight;
   }, [activeStatusContact?.contact.id, activeStatusContact?.items]);
+
+  // --- Status compose modal ---
+  // Baileys targets a status post to an explicit allow-list (statusJidList); whatsapp-web.js has no
+  // per-recipient concept and broadcasts to the account's status-privacy audience instead, so the
+  // recipient picker is Baileys-only.
+  const isBaileysEngine = currentEngine.data?.engineType === 'baileys';
+
+  const [composeOpen, setComposeOpen] = useState<boolean>(false);
+  const [composeType, setComposeType] = useState<'text' | 'image'>('text');
+  const [composeText, setComposeText] = useState<string>('');
+  const [composeBgColor, setComposeBgColor] = useState<string>('');
+  const [composeFont, setComposeFont] = useState<string>('');
+  const [composeImageUrl, setComposeImageUrl] = useState<string>('');
+  const [composeImageBase64, setComposeImageBase64] = useState<string | null>(null);
+  const [composeCaption, setComposeCaption] = useState<string>('');
+  const [composeRecipients, setComposeRecipients] = useState<string[]>([]);
+  const [composeRecipientSearch, setComposeRecipientSearch] = useState<string>('');
+  const [composePosting, setComposePosting] = useState<boolean>(false);
+  const composeFileInputRef = useRef<HTMLInputElement | null>(null);
+
+  // Sourced only while the modal is actually open on Baileys — no reason to fetch the full contact
+  // list on wwjs (no picker) or before the user has opened compose.
+  const composeContactsQuery = useQuery({
+    queryKey: ['status-compose-contacts', selectedSessionId],
+    queryFn: () => contactApi.list(selectedSessionId!),
+    enabled: composeOpen && isBaileysEngine && Boolean(selectedSessionId),
+  });
+  const composeContacts = composeContactsQuery.data ?? [];
+  const composeRecipientSearchLower = composeRecipientSearch.toLowerCase();
+  const filteredComposeContacts = composeContacts.filter(c =>
+    (c.name ?? c.pushName ?? c.number ?? c.id).toLowerCase().includes(composeRecipientSearchLower),
+  );
+
+  const resetComposeForm = useCallback(() => {
+    setComposeType('text');
+    setComposeText('');
+    setComposeBgColor('');
+    setComposeFont('');
+    setComposeImageUrl('');
+    setComposeImageBase64(null);
+    setComposeCaption('');
+    setComposeRecipients([]);
+    setComposeRecipientSearch('');
+    if (composeFileInputRef.current) composeFileInputRef.current.value = '';
+  }, []);
+
+  const closeComposeModal = useCallback(() => {
+    setComposeOpen(false);
+    resetComposeForm();
+  }, [resetComposeForm]);
+
+  const toggleComposeRecipient = (id: string) => {
+    setComposeRecipients(prev => (prev.includes(id) ? prev.filter(r => r !== id) : [...prev, id]));
+  };
+
+  const handleComposeImageUrlChange = (value: string) => {
+    setComposeImageUrl(value);
+    if (value) {
+      setComposeImageBase64(null);
+      if (composeFileInputRef.current) composeFileInputRef.current.value = '';
+    }
+  };
+
+  const handleComposeImageFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setComposeImageUrl('');
+    const reader = new FileReader();
+    reader.onload = event => {
+      // The backend's stripBase64DataUri unwraps a `data:...;base64,` prefix, so passing the raw
+      // data URL through as `base64` is safe — no need to slice it ourselves.
+      setComposeImageBase64(event.target?.result as string);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const composeCanSubmit =
+    Boolean(selectedSessionId) &&
+    !composePosting &&
+    (composeType === 'text' ? composeText.trim().length > 0 : Boolean(composeImageBase64 || composeImageUrl.trim())) &&
+    (!isBaileysEngine || composeRecipients.length > 0);
+
+  const handleComposeSubmit = async () => {
+    if (!selectedSessionId || !composeCanSubmit) return;
+    setComposePosting(true);
+    try {
+      // whatsapp-web.js ignores `recipients` entirely (it broadcasts to status@broadcast and only
+      // logs a one-time warning if the field is non-empty), but the backend DTO still requires a
+      // non-empty, JID-shaped array on every engine (SendTextStatusDto/SendImageStatusDto:
+      // @ArrayMinSize(1), no @IsOptional) — an empty array 400s regardless of engine. The picker is
+      // hidden on wwjs since it has no effect there; this placeholder just keeps the request valid.
+      const recipients = isBaileysEngine ? composeRecipients : ['0@c.us'];
+      if (composeType === 'text') {
+        await sessionApi.postTextStatus(selectedSessionId, composeText.trim(), recipients, {
+          backgroundColor: composeBgColor || undefined,
+          font: composeFont === '' ? undefined : Number(composeFont),
+        });
+      } else {
+        const image = composeImageBase64 ? { base64: composeImageBase64 } : { url: composeImageUrl.trim() };
+        await sessionApi.postImageStatus(selectedSessionId, image, recipients, composeCaption.trim() || undefined);
+      }
+      showSuccessToast(t('chats.status.posted'));
+      closeComposeModal();
+      statusesQuery.refetch();
+    } catch (err) {
+      showErrorToast(t('chats.status.postFailed'), err instanceof Error ? err.message : undefined);
+    } finally {
+      setComposePosting(false);
+    }
+  };
 
   const {
     data: messages = [],
@@ -1158,6 +1271,14 @@ export function Chats() {
                   onChange={e => setSearchQuery(e.target.value)}
                 />
               </div>
+
+              {/* Compose a new status — only meaningful on the Status tab. */}
+              {activeTab === 'status' && (
+                <button type="button" className="btn-primary status-compose-trigger" onClick={() => setComposeOpen(true)}>
+                  <Plus size={16} />
+                  {t('chats.status.compose')}
+                </button>
+              )}
             </div>
 
             {/* Chat list */}
@@ -1760,6 +1881,138 @@ export function Chats() {
         onClose={() => setLightboxIndex(null)}
         onNavigate={setLightboxIndex}
       />
+
+      {composeOpen && (
+        <Modal
+          open
+          onClose={closeComposeModal}
+          title={t('chats.status.compose')}
+          closeLabel={t('common.close')}
+          className="status-compose-modal"
+          footer={
+            <>
+              <button className="btn-secondary" onClick={closeComposeModal} disabled={composePosting}>
+                {t('common.cancel')}
+              </button>
+              <button className="btn-primary" onClick={handleComposeSubmit} disabled={!composeCanSubmit}>
+                {composePosting ? <Loader2 className="animate-spin" size={16} /> : t('chats.status.post')}
+              </button>
+            </>
+          }
+        >
+          <div className="compose-type-toggle">
+            <button type="button" className={composeType === 'text' ? 'active' : ''} onClick={() => setComposeType('text')}>
+              {t('chats.status.composeText')}
+            </button>
+            <button
+              type="button"
+              className={composeType === 'image' ? 'active' : ''}
+              onClick={() => setComposeType('image')}
+            >
+              {t('chats.status.composeImage')}
+            </button>
+          </div>
+
+          {composeType === 'text' ? (
+            <>
+              <div className="compose-field">
+                <label>{t('chats.status.composeText')}</label>
+                <textarea
+                  value={composeText}
+                  onChange={e => setComposeText(e.target.value)}
+                  maxLength={4096}
+                  placeholder={t('chats.status.composeText')}
+                />
+              </div>
+              <div className="compose-row">
+                <div className="compose-field">
+                  <label>{t('chats.status.backgroundColor')}</label>
+                  <input
+                    type="color"
+                    value={composeBgColor || '#000000'}
+                    onChange={e => setComposeBgColor(e.target.value)}
+                  />
+                </div>
+                <div className="compose-field">
+                  <label>{t('chats.status.font')}</label>
+                  <select value={composeFont} onChange={e => setComposeFont(e.target.value)}>
+                    <option value="">{t('chats.status.fontDefault')}</option>
+                    {[0, 1, 2, 3, 4, 5].map(f => (
+                      <option key={f} value={f}>
+                        {f}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="compose-field">
+                <label>{t('chats.status.composeImage')}</label>
+                <input
+                  type="url"
+                  placeholder="https://example.com/image.jpg"
+                  value={composeImageUrl}
+                  onChange={e => handleComposeImageUrlChange(e.target.value)}
+                />
+              </div>
+              <p className="compose-image-or">{t('chats.status.orLabel')}</p>
+              <div className="compose-field">
+                <input
+                  type="file"
+                  accept="image/*"
+                  ref={composeFileInputRef}
+                  onChange={handleComposeImageFile}
+                />
+              </div>
+              <div className="compose-field">
+                <label>{t('chats.status.caption')}</label>
+                <input
+                  type="text"
+                  placeholder={t('chats.captionPlaceholder')}
+                  value={composeCaption}
+                  onChange={e => setComposeCaption(e.target.value)}
+                  maxLength={1024}
+                />
+              </div>
+            </>
+          )}
+
+          {isBaileysEngine && (
+            <div className="compose-field">
+              <label>{t('chats.status.recipients')}</label>
+              <input
+                type="text"
+                placeholder={t('common.search')}
+                value={composeRecipientSearch}
+                onChange={e => setComposeRecipientSearch(e.target.value)}
+              />
+              <div className="compose-recipients">
+                {composeContactsQuery.isLoading ? (
+                  <div className="compose-recipients-empty">
+                    <Loader2 className="animate-spin" size={16} />
+                  </div>
+                ) : filteredComposeContacts.length === 0 ? (
+                  <div className="compose-recipients-empty">{t('chats.status.noContacts')}</div>
+                ) : (
+                  filteredComposeContacts.map(c => (
+                    <label key={c.id} className="compose-recipient-row">
+                      <input
+                        type="checkbox"
+                        checked={composeRecipients.includes(c.id)}
+                        onChange={() => toggleComposeRecipient(c.id)}
+                      />
+                      <span>{c.name || c.pushName || c.number || c.id}</span>
+                    </label>
+                  ))
+                )}
+              </div>
+              <p className="input-hint">{t('chats.status.recipientsHint')}</p>
+            </div>
+          )}
+        </Modal>
+      )}
     </div>
   );
 }
