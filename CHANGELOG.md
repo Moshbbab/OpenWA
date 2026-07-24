@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Group messages now carry a stable sender identity, so same-named participants no longer blur
+  together.** Group messages persist the participant JID (new `author` column on `messages`) next
+  to the sender's display name, and the dashboard keys attribution runs and sender colors on that
+  identity instead of the name — two participants who share a pushName now get separate runs in
+  distinct colors instead of collapsing into one misattributed thread. Live, history-backfilled,
+  and websocket-delivered messages all carry it; legacy rows fall back to name-keying.
+
 - **Contacts with both a @lid and a phone identity now appear once in the status list.** Statuses
   arriving under a contact's @lid are resolved to their phone at read time — including mappings
   learned after the status arrived — so the same person no longer shows as two rows, and the
