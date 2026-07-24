@@ -738,12 +738,23 @@ export function Chats() {
     [selectedSessionId, queryClient, loadChats],
   );
 
+  // A contact's new story lands here instead of in the message pipeline; invalidate the statuses
+  // query so the Status tab refetches live. A disabled query (another tab active) just goes stale
+  // and refetches on open — no background fetch either way.
+  const handleStatusReceived = useCallback(
+    (event: { sessionId: string }) => {
+      queryClient.invalidateQueries({ queryKey: ['contact-statuses', event.sessionId] });
+    },
+    [queryClient],
+  );
+
   const { isConnected, connectionFailed, reconnect, subscribe, unsubscribe } = useWebSocket({
     onMessage: handleIncomingMessage,
     onMessageAck: handleIncomingMessageAck,
     onMessageReaction: handleIncomingMessageReaction,
     onMessageRevoked: handleIncomingMessageRevoked,
     onMessageEdited: handleIncomingMessageEdited,
+    onStatusReceived: handleStatusReceived,
   });
 
   // A transient WebSocket gap means message.received/ack/revoke events were missed, and the chat
@@ -774,6 +785,7 @@ export function Chats() {
         'message.reaction',
         'message.revoked',
         'message.edited',
+        'status.received',
       ]);
       return () => {
         unsubscribe(selectedSessionId);
