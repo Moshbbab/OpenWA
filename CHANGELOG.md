@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.9] - 2026-07-24
+
 ### Added
 
 - **Statuses (stories) are now readable on both engines and retained for 24 hours.** Contact status
