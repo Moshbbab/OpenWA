@@ -123,11 +123,10 @@
       "status": "స్థితి"
     },
     "status": {
-      "placeholderTitle": "స్థితి",
-      "placeholderDesc": "Per-contact status updates arrive in a future update.",
-      "itemCount": "{{count}} update",
-      "itemCount_other": "{{count}} updates",
+      "itemCount": "{{count}} నవీకరణ",
+      "itemCount_other": "{{count}} నవీకరణలు",
       "empty": "No contacts have an active status.",
+      "loadError": "స్థితులను లోడ్ చేయడం విఫలమైంది.",
       "mediaUnavailable": "Media unavailable",
       "compose": "Post a status",
       "composeText": "Text",

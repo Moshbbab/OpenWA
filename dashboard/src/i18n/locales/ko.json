@@ -123,11 +123,10 @@
       "status": "상태"
     },
     "status": {
-      "placeholderTitle": "상태",
-      "placeholderDesc": "연락처별 상태 업데이트는 향후 업데이트에서 제공될 예정입니다.",
       "itemCount": "업데이트 {{count}}개",
       "itemCount_other": "업데이트 {{count}}개",
       "empty": "활성 상태가 있는 연락처가 없습니다.",
+      "loadError": "상태를 불러오지 못했습니다.",
       "mediaUnavailable": "미디어를 사용할 수 없음",
       "compose": "상태 게시",
       "composeText": "텍스트",

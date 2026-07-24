@@ -123,11 +123,10 @@
       "status": "Status"
     },
     "status": {
-      "placeholderTitle": "Status",
-      "placeholderDesc": "As atualizações de status por contato chegarão em uma atualização futura.",
       "itemCount": "{{count}} atualização",
       "itemCount_other": "{{count}} atualizações",
       "empty": "Nenhum contato tem um status ativo.",
+      "loadError": "Falha ao carregar os status.",
       "mediaUnavailable": "Mídia indisponível",
       "compose": "Publicar um status",
       "composeText": "Texto",

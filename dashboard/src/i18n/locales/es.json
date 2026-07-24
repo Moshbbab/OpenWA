@@ -123,11 +123,10 @@
       "status": "Estado"
     },
     "status": {
-      "placeholderTitle": "Estado",
-      "placeholderDesc": "Las actualizaciones de estado por contacto llegarán en una futura actualización.",
       "itemCount": "{{count}} actualización",
       "itemCount_other": "{{count}} actualizaciones",
       "empty": "Ningún contacto tiene un estado activo.",
+      "loadError": "No se pudieron cargar los estados.",
       "mediaUnavailable": "Contenido multimedia no disponible",
       "compose": "Publicar un estado",
       "composeText": "Texto",

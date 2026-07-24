@@ -123,11 +123,13 @@
       "status": "סטטוס"
     },
     "status": {
-      "placeholderTitle": "סטטוס",
-      "placeholderDesc": "עדכוני סטטוס לפי איש קשר יגיעו בעדכון עתידי.",
       "itemCount": "עדכון {{count}}",
+      "itemCount_one": "עדכון {{count}}",
+      "itemCount_two": "{{count}} עדכונים",
+      "itemCount_many": "{{count}} עדכונים",
       "itemCount_other": "{{count}} עדכונים",
       "empty": "לאף איש קשר אין סטטוס פעיל.",
+      "loadError": "טעינת הסטטוסים נכשלה.",
       "mediaUnavailable": "המדיה אינה זמינה",
       "compose": "פרסם סטטוס",
       "composeText": "טקסט",
