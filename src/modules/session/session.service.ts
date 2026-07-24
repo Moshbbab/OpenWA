@@ -669,7 +669,9 @@ export class SessionService implements OnModuleDestroy, OnModuleInit, OnApplicat
           caption: s.caption,
           backgroundColor: s.backgroundColor,
           font: s.font,
-          // wwjs Status carries no inline media bytes on seed; only live onMessage attaches media.
+          // Seed now downloads media the same way the live onMessage path does (collectStatuses calls
+          // capInboundMediaFor), so a status active at connect time renders like one that arrives live.
+          media: s.media,
           postedAt: s.timestamp.getTime(),
         });
       }

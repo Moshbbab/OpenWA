@@ -2648,6 +2648,29 @@ describe('SessionService', () => {
       );
     });
 
+    it('passes engine-supplied status media through to statusStore.ingest (seeded media renders like live)', async () => {
+      const callbacks = await startAndCaptureCallbacks();
+      const media = { mimetype: 'image/png', data: 'QUJD' };
+      mockEngine.getContactStatuses.mockResolvedValue([
+        {
+          id: 'st-c',
+          contact: { id: '628333@c.us' },
+          type: 'image',
+          timestamp: new Date(1700000002000),
+          expiresAt: new Date(1700086402000),
+          media,
+        },
+      ]);
+
+      callbacks.onReady!('628123', 'Alice');
+      await flush();
+
+      expect(statusStore.ingest).toHaveBeenCalledWith(
+        'sess-uuid-1',
+        expect.objectContaining({ waStatusId: 'st-c', media }),
+      );
+    });
+
     it('swallows a getContactStatuses failure on ready (e.g. Baileys EngineNotSupportedError) without throwing', async () => {
       const callbacks = await startAndCaptureCallbacks();
       mockEngine.getContactStatuses.mockRejectedValue(new Error('not supported'));
