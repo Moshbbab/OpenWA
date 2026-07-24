@@ -123,11 +123,10 @@
       "status": "Status"
     },
     "status": {
-      "placeholderTitle": "Status",
-      "placeholderDesc": "Per-contact status updates arrive in a future update.",
       "itemCount": "{{count}} update",
       "itemCount_other": "{{count}} updates",
       "empty": "No contacts have an active status.",
+      "loadError": "Failed to load statuses.",
       "mediaUnavailable": "Media unavailable",
       "compose": "Post a status",
       "composeText": "Text",

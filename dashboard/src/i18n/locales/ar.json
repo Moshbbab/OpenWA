@@ -123,11 +123,15 @@
       "status": "الحالة"
     },
     "status": {
-      "placeholderTitle": "الحالة",
-      "placeholderDesc": "ستتوفر تحديثات الحالة لكل جهة اتصال في تحديث مستقبلي.",
       "itemCount": "تحديث {{count}}",
+      "itemCount_zero": "{{count}} تحديثات",
+      "itemCount_one": "تحديث واحد",
+      "itemCount_two": "تحديثان",
+      "itemCount_few": "{{count}} تحديثات",
+      "itemCount_many": "{{count}} تحديثًا",
       "itemCount_other": "{{count}} تحديثات",
       "empty": "لا توجد جهات اتصال لديها حالة نشطة.",
+      "loadError": "تعذر تحميل الحالات.",
       "mediaUnavailable": "الوسائط غير متوفرة",
       "compose": "نشر حالة",
       "composeText": "نص",

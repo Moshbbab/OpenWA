@@ -123,11 +123,10 @@
       "status": "Statut"
     },
     "status": {
-      "placeholderTitle": "Statut",
-      "placeholderDesc": "Les mises à jour de statut par contact arriveront dans une future mise à jour.",
       "itemCount": "{{count}} mise à jour",
       "itemCount_other": "{{count}} mises à jour",
       "empty": "Aucun contact n'a de statut actif.",
+      "loadError": "Échec du chargement des statuts.",
       "mediaUnavailable": "Média indisponible",
       "compose": "Publier un statut",
       "composeText": "Texte",

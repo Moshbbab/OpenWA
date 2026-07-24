@@ -123,11 +123,10 @@
       "status": "狀態"
     },
     "status": {
-      "placeholderTitle": "狀態",
-      "placeholderDesc": "個別聯絡人的狀態更新將於日後更新中推出。",
       "itemCount": "{{count}} 則更新",
       "itemCount_other": "{{count}} 則更新",
       "empty": "沒有聯絡人有活躍的狀態。",
+      "loadError": "無法載入狀態。",
       "mediaUnavailable": "媒體無法使用",
       "compose": "發佈狀態",
       "composeText": "文字",

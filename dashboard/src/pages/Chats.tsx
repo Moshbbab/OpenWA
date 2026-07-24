@@ -183,6 +183,10 @@ function StatusMedia({
   return <img className="channel-media" src={src} alt="" />;
 }
 
+// Mirrors @ArrayMaxSize(256) on the send-status DTOs — the picker caps selection client-side so the
+// user can't build a list the backend is guaranteed to reject.
+const STATUS_RECIPIENTS_MAX = 256;
+
 export function Chats() {
   const { t } = useTranslation();
   useDocumentTitle(t('nav.chats'));
@@ -202,7 +206,11 @@ export function Chats() {
   // Selected chat & message history
   const [activeChat, setActiveChat] = useState<Chat | null>(null);
   const [activeChannel, setActiveChannel] = useState<Channel | null>(null);
-  const [activeStatusContact, setActiveStatusContact] = useState<ContactStatusGroup | null>(null);
+  // Only the contact id is state — the open group is derived from groupedStatuses at render, so a
+  // refetch (window focus, post-compose) flows straight into the open viewer instead of leaving it
+  // pinned to the snapshot captured at click time. A group that disappears (all items expired)
+  // simply closes the viewer.
+  const [activeStatusContactId, setActiveStatusContactId] = useState<string | null>(null);
 
   // Chats/Channels/Status tab selection. Switching tabs closes whatever conversation is open so a
   // press on another tab doesn't leave a Chats-tab room rendered underneath a Channels/Status list.
@@ -211,7 +219,7 @@ export function Chats() {
     setActiveTab(tab);
     setActiveChat(null);
     setActiveChannel(null);
-    setActiveStatusContact(null);
+    setActiveStatusContactId(null);
   }, []);
 
   // Channels tab: only whatsapp-web.js implements channel listing/reading — Baileys throws 501 for
@@ -238,14 +246,6 @@ export function Chats() {
     const el = channelFeedRef.current;
     if (el) el.scrollTop = el.scrollHeight;
   }, [activeChannel?.id, channelMessages.data]);
-
-  // Same open-at-newest behavior for the status viewer pane, keyed off the active contact and its
-  // item list.
-  const statusFeedRef = useRef<HTMLDivElement | null>(null);
-  useEffect(() => {
-    const el = statusFeedRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
-  }, [activeStatusContact?.contact.id, activeStatusContact?.items]);
 
   // --- Status compose modal ---
   // Baileys targets a status post to an explicit allow-list (statusJidList); whatsapp-web.js has no
@@ -279,7 +279,8 @@ export function Chats() {
   const composeContacts = composeContactsQuery.data ?? [];
   const composeRecipientSearchLower = composeRecipientSearch.toLowerCase();
   const filteredComposeContacts = composeContacts.filter(c =>
-    (c.name ?? c.pushName ?? c.number ?? c.id).toLowerCase().includes(composeRecipientSearchLower),
+    // Match against every identity field — a named contact must still be findable by number/JID.
+    [c.name, c.pushName, c.number, c.id].some(v => v?.toLowerCase().includes(composeRecipientSearchLower)),
   );
 
   const resetComposeForm = useCallback(() => {
@@ -302,7 +303,13 @@ export function Chats() {
   }, [resetComposeForm]);
 
   const toggleComposeRecipient = (id: string) => {
-    setComposeRecipients(prev => (prev.includes(id) ? prev.filter(r => r !== id) : [...prev, id]));
+    setComposeRecipients(prev =>
+      prev.includes(id)
+        ? prev.filter(r => r !== id)
+        : prev.length >= STATUS_RECIPIENTS_MAX
+          ? prev
+          : [...prev, id],
+    );
   };
 
   const handleComposeImageUrlChange = (value: string) => {
@@ -521,7 +528,7 @@ export function Chats() {
       void loadChats(selectedSessionId);
       setActiveChat(null);
       setActiveChannel(null);
-      setActiveStatusContact(null);
+      setActiveStatusContactId(null);
       setAttachment(null);
       setPreviewUrl(null);
     }
@@ -877,12 +884,12 @@ export function Chats() {
             setActiveTab('status');
             setActiveChat(chat);
             setActiveChannel(null);
-            setActiveStatusContact(null);
+            setActiveStatusContactId(null);
           } else {
             setActiveTab('chats');
             setActiveChat(chat);
             setActiveChannel(null);
-            setActiveStatusContact(null);
+            setActiveStatusContactId(null);
           }
         } else {
           pendingHitRef.current = null;
@@ -905,12 +912,12 @@ export function Chats() {
         setActiveTab('status');
         setActiveChat(chat);
         setActiveChannel(null);
-        setActiveStatusContact(null);
+        setActiveStatusContactId(null);
       } else {
         setActiveTab('chats');
         setActiveChat(chat);
         setActiveChannel(null);
-        setActiveStatusContact(null);
+        setActiveStatusContactId(null);
       }
     }
   }, [chats, activeChat, switchTab]);
@@ -1156,9 +1163,24 @@ export function Chats() {
     .filter(
       g =>
         (g.contact.name ?? '').toLowerCase().includes(searchQueryLower) ||
+        (g.contact.pushName ?? '').toLowerCase().includes(searchQueryLower) ||
         g.contact.id.toLowerCase().includes(searchQueryLower),
     )
     .sort((a, b) => (a.latest < b.latest ? 1 : a.latest > b.latest ? -1 : 0));
+
+  // The open status group, derived — see the activeStatusContactId declaration.
+  const activeStatusGroup = activeStatusContactId
+    ? (groupedStatuses.find(g => g.contact.id === activeStatusContactId) ?? null)
+    : null;
+
+  // Same open-at-newest behavior for the status viewer pane, keyed off the active contact and its
+  // item list. Declared after activeStatusGroup: the viewer follows refetches because the deps are
+  // the derived group's items, not a click-time snapshot.
+  const statusFeedRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    const el = statusFeedRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [activeStatusGroup?.contact.id, activeStatusGroup?.items]);
 
   // Shared row markup for the Chats and Status lists — a plain function (not memoized) since it
   // closes over render-scoped state (activeChat, listPics) that already changes every render.
@@ -1252,7 +1274,7 @@ export function Chats() {
           </p>
         </div>
       ) : (
-        <div className={`chats-layout ${activeChat || activeChannel || activeStatusContact ? 'has-active-chat' : ''}`}>
+        <div className={`chats-layout ${activeChat || activeChannel || activeStatusGroup ? 'has-active-chat' : ''}`}>
           {/* LEFT SIDEBAR: session & chat rooms */}
           <aside className="chats-sidebar">
             <div className="sidebar-header-box">
@@ -1388,6 +1410,11 @@ export function Chats() {
                   <div className="chats-list-loading">
                     <Loader2 className="animate-spin" size={24} />
                   </div>
+                ) : statusesQuery.isError ? (
+                  <div className="chats-list-empty">
+                    <AlertCircle size={24} className="text-warn" />
+                    <span>{t('chats.status.loadError')}</span>
+                  </div>
                 ) : groupedStatuses.length === 0 ? (
                   <div className="chats-list-empty">
                     <span>{t('chats.status.empty')}</span>
@@ -1396,15 +1423,17 @@ export function Chats() {
                   groupedStatuses.map(group => (
                     <div
                       key={group.contact.id}
-                      className={`chat-item-card ${activeStatusContact?.contact.id === group.contact.id ? 'active' : ''}`}
-                      onClick={() => setActiveStatusContact(group)}
+                      className={`chat-item-card ${activeStatusContactId === group.contact.id ? 'active' : ''}`}
+                      onClick={() => setActiveStatusContactId(group.contact.id)}
                     >
                       <div className="chat-avatar">
                         <CircleDashed size={20} />
                       </div>
                       <div className="chat-item-info">
                         <div className="chat-item-top">
-                          <span className="chat-item-name">{group.contact.name || group.contact.id}</span>
+                          <span className="chat-item-name">
+                            {group.contact.name ?? group.contact.pushName ?? group.contact.id}
+                          </span>
                           <span className="chat-item-time">
                             {formatChatTime(Math.floor(new Date(group.latest).getTime() / 1000))}
                           </span>
@@ -1874,23 +1903,23 @@ export function Chats() {
                   )}
                 </div>
               </div>
-            ) : activeStatusContact ? (
+            ) : activeStatusGroup ? (
               // Read-only status viewer: no send footer, reactions, delete, reply, or markChatRead —
               // statuses are ephemeral broadcast posts, not a two-way conversation.
-              <div key={activeStatusContact.contact.id} className="channel-room">
+              <div key={activeStatusGroup.contact.id} className="channel-room">
                 <header className="chats-room-header">
                   <button
                     className="room-back"
-                    onClick={() => setActiveStatusContact(null)}
+                    onClick={() => setActiveStatusContactId(null)}
                     aria-label={t('common.back')}
                   >
                     <ArrowLeft size={20} />
                   </button>
                   <CircleDashed size={20} />
-                  <h2>{activeStatusContact.contact.name ?? activeStatusContact.contact.id}</h2>
+                  <h2>{activeStatusGroup.contact.name ?? activeStatusGroup.contact.pushName ?? activeStatusGroup.contact.id}</h2>
                 </header>
                 <div className="messages-list" ref={statusFeedRef}>
-                  {activeStatusContact.items.map(item => (
+                  {activeStatusGroup.items.map(item => (
                     <div key={item.id} className="message-bubble incoming">
                       {item.mediaUrl && (
                         <StatusMedia
@@ -2044,6 +2073,7 @@ export function Chats() {
                       <input
                         type="checkbox"
                         checked={composeRecipients.includes(c.id)}
+                        disabled={!composeRecipients.includes(c.id) && composeRecipients.length >= STATUS_RECIPIENTS_MAX}
                         onChange={() => toggleComposeRecipient(c.id)}
                       />
                       <span>{c.name || c.pushName || c.number || c.id}</span>
