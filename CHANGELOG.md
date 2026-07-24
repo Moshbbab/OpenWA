@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Text statuses keep their posted look.** The background color and font of a text status are now
+  captured on ingest (from the Baileys engine, which carries them on the wire) and rendered in the
+  dashboard viewer — colored bubble with white text and an approximated font family — instead of
+  every text story looking identical. The fields already existed on the API and SDK `StatusRecord`
+  shapes; whatsapp-web.js does not expose styling, so statuses from that engine render as before.
+
 - **New statuses now appear in the dashboard in real time.** A freshly ingested contact status is
   broadcast over the websocket as `status.received` (same payload as the webhook), and the Status
   tab refreshes immediately instead of waiting for a focus refetch — including while a contact's
