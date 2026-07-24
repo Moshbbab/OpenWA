@@ -21,13 +21,13 @@ export class AddMessageAuthor1784908800000 implements MigrationInterface {
 
   private async hasAuthorColumn(queryRunner: QueryRunner): Promise<boolean> {
     if (queryRunner.connection.options.type === 'postgres') {
-      const rows: unknown[] = await queryRunner.query(
+      const rows = (await queryRunner.query(
         `SELECT 1 FROM information_schema.columns
          WHERE table_schema = current_schema() AND table_name = 'messages' AND column_name = 'author'`,
-      );
+      )) as unknown[];
       return rows.length > 0;
     }
-    const rows: Array<{ name: string }> = await queryRunner.query(`PRAGMA table_info("messages")`);
+    const rows = (await queryRunner.query(`PRAGMA table_info("messages")`)) as Array<{ name: string }>;
     return rows.some(r => r.name === 'author');
   }
 
