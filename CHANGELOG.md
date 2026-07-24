@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Contacts with both a @lid and a phone identity now appear once in the status list.** Statuses
+  arriving under a contact's @lid are resolved to their phone at read time — including mappings
+  learned after the status arrived — so the same person no longer shows as two rows, and the
+  per-contact endpoint matches rows stored under either form.
+
+- **The status seed no longer downloads media the store would discard.** Media downloads during the
+  connect-time backfill are pre-gated at the store's own 10 MB cap instead of the looser global
+  media cap, so an over-cap blob is marked omitted without ever being fetched.
+
 ## [0.10.9] - 2026-07-24
 
 ### Added
@@ -79,15 +90,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `tsbuildinfo` pinned inside `dist/` (needed so the dev server's `deleteOutDir` wipes it with the
   output) is deleted at the end of the builder stage instead of being copied into every published
   image.
-
-- **Contacts with both a @lid and a phone identity now appear once in the status list.** Statuses
-  arriving under a contact's @lid are resolved to their phone at read time — including mappings
-  learned after the status arrived — so the same person no longer shows as two rows, and the
-  per-contact endpoint matches rows stored under either form.
-
-- **The status seed no longer downloads media the store would discard.** Media downloads during the
-  connect-time backfill are pre-gated at the store's own 10 MB cap instead of the looser global
-  media cap, so an over-cap blob is marked omitted without ever being fetched.
 
 - **`npm run dev` no longer crashes on the second launch with `Cannot find module '.../dist/main'`.**
   The TypeScript 6 upgrade moved the incremental build cache (`tsbuildinfo`) out of `dist/` to the
