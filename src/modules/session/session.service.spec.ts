@@ -145,6 +145,7 @@ describe('SessionService', () => {
       emitGroupLeave: jest.fn(),
       emitGroupUpdate: jest.fn(),
       emitCallReceived: jest.fn(),
+      emitStatusReceived: jest.fn(),
       emitQRCode: jest.fn(),
     };
 
@@ -2255,6 +2256,11 @@ describe('SessionService', () => {
           expiresAt: 1000 + 86400000,
         }),
       );
+      // …and the same payload goes over the websocket so the dashboard refreshes live.
+      expect(eventsGateway.emitStatusReceived).toHaveBeenCalledWith(
+        'sess-uuid-1',
+        expect.objectContaining({ statusId: 'st1', contact: { id: '628111@c.us', name: 'Alice' } }),
+      );
     });
 
     it('does not dispatch status.received for a duplicate delivery (ingest resolves created=false)', async () => {
@@ -2279,6 +2285,7 @@ describe('SessionService', () => {
       await flush();
 
       expect(dispatchedEvents('status.received')).toHaveLength(0);
+      expect(eventsGateway.emitStatusReceived).not.toHaveBeenCalled();
     });
 
     it('skips persist and dispatch for ephemeral messages when STORE_EPHEMERAL_MESSAGES=false', async () => {
