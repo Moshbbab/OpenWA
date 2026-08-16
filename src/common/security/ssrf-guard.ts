@@ -32,7 +32,13 @@ export function redactSsrfError(error: unknown, logger?: { warn: (message: strin
     logger?.warn(`SSRF guard blocked ${site ?? 'an outbound fetch'}: ${error.message}`);
     return SSRF_BLOCKED_CLIENT_MESSAGE;
   }
-  return error instanceof Error ? error.message : String(error);
+  // OS-level connect errors name the receiver's host:port (connect ECONNREFUSED 10.0.0.1:443) —
+  // internal topology an API consumer has no business reading out of a delivery-failure row.
+  // The error code stays (actionable), the address goes.
+  return (error instanceof Error ? error.message : String(error)).replace(
+    /\b(ECONNREFUSED|ENOTFOUND|ETIMEDOUT|EHOSTUNREACH|ECONNRESET|EAI_AGAIN)\s+[\w.-]+(?::\d+)?(?=\s|$)/g,
+    '$1 [redacted]',
+  );
 }
 
 /**
@@ -326,7 +332,10 @@ export async function resolveSafeFetchTarget(
   const host = url.hostname.replace(/^\[|\]$/g, ''); // strip IPv6 brackets
 
   if (getAllowedHosts().has(host.toLowerCase())) {
-    return null; // explicitly allowlisted internal target
+    // Allowlisted = exempt from the BLOCK check, not from pinning: the operator opted into THIS
+    // host, so freeze the connection to the addresses it resolves to right now. Returning null
+    // here left a rebinding window where a name could flip to a different address after validation.
+    return lookupWithDeadline(host, signal);
   }
 
   if (isIPv4(host) || isIPv6(host)) {
@@ -464,7 +473,11 @@ export async function withSafeFetch<T>(
 ): Promise<T> {
   const guard = opts.guard ?? true;
   if (!guard) {
-    return useAndSettleBody(await undiciFetch(rawUrl, { ...init, redirect: 'follow' }), use);
+    // Redirect-following is a separate decision from SSRF protection: an operator who disabled the
+    // guard (closed network) did not opt into chasing 3xx chains to arbitrary hosts. Fail loudly
+    // unless WEBHOOK_SSRF_REDIRECTS=true says otherwise.
+    const follow = process.env.WEBHOOK_SSRF_REDIRECTS === 'true';
+    return useAndSettleBody(await undiciFetch(rawUrl, { ...init, redirect: follow ? 'follow' : 'error' }), use);
   }
 
   if (opts.followRedirects) {
