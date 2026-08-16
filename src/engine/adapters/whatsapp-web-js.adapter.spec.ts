@@ -47,7 +47,7 @@ jest.mock('dns/promises', () => {
   return {
     __esModule: true,
     ...actual,
-    lookup: jest.fn(async () => [{ address: '93.184.216.34', family: 4 }]),
+    lookup: jest.fn(() => Promise.resolve([{ address: '93.184.216.34', family: 4 }])),
   };
 });
 
